@@ -1,0 +1,1 @@
+-type schedule_item() :: {Hash::term(), Interval::integer(), LastTimeStamp::term()}.
