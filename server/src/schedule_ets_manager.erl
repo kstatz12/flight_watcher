@@ -22,7 +22,7 @@ gift() ->
 
 
 start_link() ->
-    gen_server:start_link({local, ?SERVER}, ?SERVER, data, []).
+    gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
 init(_) ->
     process_flag(trap_exit, true),
@@ -34,29 +34,28 @@ handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
 handle_cast(gift, State) ->
-    SRV  = whereis(schedule_ets_srv),
+    SRV  = wait_for_server(),
     link(SRV),
     TableId = ets:new(schedule_table, [set, private]),
     ets:setopts(TableId, {heir, self(), []}),
     ets:give_away(TableId, SRV, []),
     {noreply, State#state{table_id=TableId}};
-
 handle_cast(_, State) ->
     {noreply, State}.
 
 handle_info({'EXIT', Pid, killed}, State) ->
     TableId = State#state.table_id,
-    io:format("Server(~p) has died, ETS Table With Id: ~p~n", Pid, TableId),
+    io:format("Server(~p) has died, ETS Table With Id: ~p~n", [Pid, TableId]),
     {noreply, State};
 handle_info({'ETS-TRANSFER', TableId, Pid, Data}, State) ->
     SRV = wait_for_server(),
-    io:format("Warning, ETS With ID ~p Owned By ~p Died~n", TableId, Pid),
+    io:format("Server(~p) Died, Reassigning Table(~p) to ~p~n", [Pid, TableId, SRV]),
     link(SRV),
     ets:give_away(TableId, SRV, Data),
     {noreply, State#state{table_id=TableId}}.
 
 wait_for_server() ->
-    case whereis(schedule_ets_srv) of
+    case whereis(schedule_ets_server) of
         undefined ->
             timer:sleep(1),
             wait_for_server();
